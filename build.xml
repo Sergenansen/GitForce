@@ -1,0 +1,72 @@
+<project name="Salesforce Deploy Build Script" basedir="." xmlns:sf="antlib:com.salesforce">
+
+	<property file="build.properties" />
+	<property environment="env" />
+
+	<!-- Include any necessary jar files such as the ant salesforce migration toolkit -->
+	<path id="classpath">
+	  <fileset dir="${build.dir}/build/lib" includes="*.jar" />
+	</path>
+
+    <!-- retrieve files from the source org and place them in the build/src directory -->
+	<target name="retrieve" description="Clean the source directory and retrieve metadata from source org" depends="cleanSourceDirectory">
+		<echo>Logging into ${sfsource.serverurl}</echo>
+		<echo>With username: ${sfsource.username}</echo>
+		<sf:retrieve username="${sfsource.username}" password="${sfsource.password}" serverurl="${sfsource.serverurl}" retrieveTarget="${source.dir}" unpackaged="${source.metadata}" />
+	</target>
+
+    <!-- Clean (remove all files) from the build/src directory -->
+	<target name="cleanSourceDirectory" description="Clean all metadata and directories in source directory">
+		<echo>Cleaning directory: ${source.dir}</echo>
+		<delete includeEmptyDirs="true">
+			<fileset dir="${source.dir}" includes="**/*" excludes="destructiveChanges.xml"/>
+		</delete>
+	</target>
+
+    <!-- Retreives latest code into src direct and deploys the items from package.xml into the target org -->
+	<target name="retrieveAndDeploy" description="Clean, retrieve code from source org, and deploy metadata to target org" depends="retrieve,deploy" />
+
+	<target name="deploy" description="Deploy metadata from source dir to target org">
+		<echo>Deploying code from ${source.dir}</echo>
+		<echo>Deploying code to ${sftarget.serverurl}</echo>
+		<echo>Deploying code with username: ${sftarget.username}</echo>	
+		<echo>Run All Tests: ${sftarget.runAllTests}</echo>
+		<echo>Deploy Root: ${source.dir}</echo>
+		<sf:deploy username="${sftarget.username}" password="${sftarget.password}" serverurl="${sftarget.serverurl}" deployroot="${source.dir}" runAllTests="${sftarget.runAllTests}" />
+	</target>
+
+	<!-- SVN related targets -->
+    <typedef resource="org/tigris/subversion/svnant/svnantlib.xml" classpathref="classpath"/>
+
+    <svnSetting username="${svn.username}" password="${svn.password}" id="svn.settings" />
+
+    <target name="checkout" depends="cleanSourceDirectory">
+    	<echo>Checking out from SVN url: ${svn.url}</echo>
+    	<echo>SVN Username: ${svn.username}</echo>
+    	<echo>Checking files from ${svn.revision} to ${source.dir}</echo>
+        <svn refid="svn.settings">
+          <checkout url="${svn.url}" revision="${svn.revision}" destpath="${source.dir}" />
+        </svn>
+    </target>
+
+    <macrodef name = "git">
+        <attribute name = "dir" default=""/>
+        <attribute name = "branch" default="master"/>
+        <sequential>
+            <exec executable = "git" dir="@{dir}">
+                 <arg value="pull" />
+                 <arg value="origin" />
+                 <arg value="@{branch}" />
+            </exec>
+        </sequential>
+    </macrodef>
+
+    <target name="checkoutFromGit">
+    	<echo>Issuing git pull from directory: ${git.dir}</echo>
+    	<echo>Pulling from branch: ${git.branch}</echo>
+    	<git dir="${git.dir}" branch="${git.branch}"/>
+    </target>
+
+    <target name="checkoutFromGitAndDeploy" description="Checkout from Git and deploy to server" depends="checkoutFromGit,deploy" />
+
+</project>
